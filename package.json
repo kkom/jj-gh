@@ -1,0 +1,47 @@
+{
+  "name": "jj-gh",
+  "version": "0.0.1",
+  "description": "A jj subcommand for working with GitHub",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kkom/jj-gh.git"
+  },
+  "bin": {
+    "jj-gh": "dist/jj-gh.js"
+  },
+  "files": [
+    "dist/jj-gh.js"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/main.ts --target=bun --outfile dist/jj-gh.js && chmod +x dist/jj-gh.js",
+    "check": "bun run --sequential \"check:*\" && bun run test && bun run build",
+    "check:format": "oxfmt --check .",
+    "check:lint": "oxlint .",
+    "check:types": "tsc",
+    "fix": "bun run --sequential \"fix:*\"",
+    "fix:format": "oxfmt .",
+    "fix:lint": "oxlint --fix .",
+    "prepack": "bun run build",
+    "release:major": "bun pm version major --no-git-tag-version",
+    "release:minor": "bun pm version minor --no-git-tag-version",
+    "release:patch": "bun pm version patch --no-git-tag-version",
+    "test": "bun test ./src"
+  },
+  "devDependencies": {
+    "@effect/platform-bun": "4.0.0-rc.118",
+    "@octokit/openapi-types": "29.0.1",
+    "@tsconfig/strictest": "2.0.8",
+    "@types/bun": "1.4.2",
+    "effect": "4.0.0-rc.118",
+    "oxfmt": "0.71.0",
+    "oxlint": "1.86.0",
+    "oxlint-tsgolint": "7.0.2003",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "packageManager": "bun@1.4.2"
+}

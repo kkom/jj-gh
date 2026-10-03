@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    concurrency:
+      group: ci-${{ github.ref }}
+      cancel-in-progress: ${{ github.ref_name != 'main' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install tools
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5 # v5.0.0
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # A pull request that changes the version is a release, so the new version has to be
+      # higher than the base branch's, and one npm doesn't have.
+      - name: Check the version
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin "${GITHUB_BASE_REF}"
+          export HEAD_VERSION BASE_VERSION
+          HEAD_VERSION=$(jq -r .version package.json)
+          BASE_VERSION=$(git show "FETCH_HEAD:package.json" 2>/dev/null | jq -r .version || true)
+          if [ "${HEAD_VERSION}" = "${BASE_VERSION}" ]; then
+            exit 0
+          fi
+          if [ -n "${BASE_VERSION}" ] && [ "$(bun -e 'console.log(Bun.semver.order(process.env.HEAD_VERSION, process.env.BASE_VERSION))')" != 1 ]; then
+            echo "::error::version ${HEAD_VERSION} isn't higher than ${BASE_VERSION} on ${GITHUB_BASE_REF}"
+            exit 1
+          fi
+          if [ -n "$(npm view "jj-gh@${HEAD_VERSION}" version 2>/dev/null || true)" ]; then
+            echo "::error::npm already has jj-gh@${HEAD_VERSION}"
+            exit 1
+          fi
+
+      - name: Check
+        run: bun run check
+
+      - name: Run the built file
+        run: ./dist/jj-gh.js --version

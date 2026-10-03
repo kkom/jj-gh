@@ -1,0 +1,56 @@
+name: Release
+
+# Publishes the version in package.json when npm doesn't have it yet. Started by hand, from
+# the default branch.
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+
+    # `id-token` lets npm exchange the workflow's identity for a publish credential, so no npm
+    # token is stored. `contents` is for the tag and the GitHub release.
+    permissions:
+      contents: write
+      id-token: write
+
+    concurrency:
+      group: release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install tools
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5 # v5.0.0
+
+      # `npm view` prints nothing for a version the registry doesn't have, and fails for a
+      # package it doesn't have. Both leave the output empty.
+      - name: Read the version
+        id: version
+        run: |
+          version=$(jq -r .version package.json)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "published=$(npm view "jj-gh@${version}" version 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        if: steps.version.outputs.published == ''
+        run: bun install --frozen-lockfile
+
+      - name: Check
+        if: steps.version.outputs.published == ''
+        run: bun run check
+
+      # bun can't publish with the workflow's identity, so npm does it. `prepack` builds the file.
+      - name: Publish to npm
+        if: steps.version.outputs.published == ''
+        run: npm publish --access public --provenance
+
+      - name: Create the GitHub release
+        if: steps.version.outputs.published == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release create "v${VERSION}" --generate-notes --target "${GITHUB_SHA}"

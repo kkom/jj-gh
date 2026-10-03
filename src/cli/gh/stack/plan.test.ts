@@ -1,0 +1,147 @@
+import { describe, expect, it } from "bun:test";
+
+import { Option } from "effect";
+
+import { PullRequestNumberSchema, StackNumberSchema } from "../../../clients/github/types";
+import { pullRequests, stackOf } from "../../../testing/fake-github";
+import {
+  basesFor,
+  descriptionSyncFor,
+  mustDissolve,
+  normalizedDescription,
+  registrationFor,
+  titleAndBody,
+} from "./plan";
+
+describe("basesFor", () => {
+  it("targets the trunk under the bottom and the branch below everywhere else", () => {
+    expect(basesFor(["a", "b", "c"], "main")).toEqual(["main", "a", "b"]);
+  });
+});
+
+const wanted = (...numbers: readonly (number | undefined)[]) =>
+  numbers.map((number) =>
+    number === undefined ? Option.none() : Option.some(PullRequestNumberSchema.make(number)),
+  );
+
+describe("mustDissolve", () => {
+  it.each([
+    {
+      basesMove: false,
+      dissolves: false,
+      existing: Option.none(),
+      order: wanted(1, 2),
+      when: "no stack exists",
+    },
+    {
+      basesMove: false,
+      dissolves: false,
+      existing: stackOf(1, 2),
+      order: wanted(1, 2),
+      when: "the stack is in the wanted order",
+    },
+    {
+      basesMove: false,
+      dissolves: false,
+      existing: stackOf(1, 2),
+      order: wanted(1, 2),
+      when: "pull requests are added on top",
+    },
+    {
+      basesMove: false,
+      dissolves: false,
+      existing: stackOf(1, 2, 3),
+      order: wanted(1, 2),
+      when: "only the bottom part is wanted",
+    },
+    {
+      basesMove: false,
+      dissolves: true,
+      existing: stackOf(1, 2, 3),
+      order: wanted(1, 3, 2),
+      when: "the order changed",
+    },
+    {
+      basesMove: false,
+      dissolves: true,
+      existing: stackOf(1, 2, 3),
+      order: wanted(1, 3),
+      when: "a change was dropped",
+    },
+    {
+      basesMove: false,
+      dissolves: true,
+      existing: stackOf(1, 2),
+      order: wanted(1, undefined, 2),
+      when: "a change was inserted",
+    },
+    {
+      basesMove: true,
+      dissolves: true,
+      existing: stackOf(1, 2),
+      order: wanted(1, 2),
+      when: "a base has to move",
+    },
+    {
+      basesMove: false,
+      dissolves: true,
+      existing: stackOf(),
+      order: wanted(4, 5),
+      when: "every pull request of it merged",
+    },
+  ])("when $when", ({ basesMove, dissolves, existing, order }) => {
+    expect(mustDissolve(existing, order, basesMove)).toBe(dissolves);
+  });
+});
+
+describe("registrationFor", () => {
+  it("creates a stack for two or more pull requests in none", () => {
+    expect(registrationFor(Option.none(), pullRequests(1, 2))).toEqual({
+      _tag: "Create",
+      pullRequests: pullRequests(1, 2),
+    });
+  });
+
+  it("registers nothing for a single pull request", () => {
+    expect(registrationFor(Option.none(), pullRequests(1))).toEqual({ _tag: "Unchanged" });
+  });
+
+  it("leaves a stack that already holds the pull requests", () => {
+    expect(registrationFor(stackOf(1, 2, 3), pullRequests(1, 2))).toEqual({ _tag: "Unchanged" });
+  });
+
+  it("appends pull requests added on top", () => {
+    expect(registrationFor(stackOf(1, 2), pullRequests(1, 2, 3))).toEqual({
+      _tag: "Append",
+      pullRequests: pullRequests(3),
+      stack: StackNumberSchema.make(7),
+    });
+  });
+});
+
+describe("titleAndBody", () => {
+  it("takes the first line as the title and the rest as the body", () => {
+    expect(titleAndBody("Add a thing\n\nBecause.\n\nTrailer: x\n")).toEqual({
+      body: "Because.\n\nTrailer: x",
+      title: "Add a thing",
+    });
+  });
+});
+
+describe("normalizedDescription", () => {
+  it("reads GitHub's line endings and jj's trailing newline as the same text", () => {
+    expect(normalizedDescription("A title\r\n\r\nWhy.\r\n")).toBe("A title\n\nWhy.");
+    expect(normalizedDescription("A title\n\nWhy.\n")).toBe("A title\n\nWhy.");
+  });
+});
+
+describe("descriptionSyncFor", () => {
+  it.each([
+    ["InSync", "new", "new"],
+    ["TakeGitHub", "old", "new"],
+    ["SendLocal", "new", "old"],
+    ["Merge", "mine", "theirs"],
+  ])("is %s for local %p and GitHub %p, pushed as old", (tag, local, onGitHub) => {
+    expect(descriptionSyncFor({ local, onGitHub, pushed: "old" })).toMatchObject({ _tag: tag });
+  });
+});

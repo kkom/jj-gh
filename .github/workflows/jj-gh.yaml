@@ -1,0 +1,103 @@
+name: jj-gh
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    concurrency:
+      group: ci-${{ github.ref }}
+      cancel-in-progress: ${{ github.ref_name != 'main' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install tools
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5 # v5.0.0
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # A pull request that changes the version is a release, so the new version has to be
+      # higher than the base branch's, and one npm doesn't have.
+      - name: Check the version
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin "${GITHUB_BASE_REF}"
+          export HEAD_VERSION BASE_VERSION
+          HEAD_VERSION=$(jq -r .version package.json)
+          BASE_VERSION=$(git show "FETCH_HEAD:package.json" 2>/dev/null | jq -r .version || true)
+          if [ "${HEAD_VERSION}" = "${BASE_VERSION}" ]; then
+            exit 0
+          fi
+          if [ -n "${BASE_VERSION}" ] && [ "$(bun -e 'console.log(Bun.semver.order(process.env.HEAD_VERSION, process.env.BASE_VERSION))')" != 1 ]; then
+            echo "::error::version ${HEAD_VERSION} isn't higher than ${BASE_VERSION} on ${GITHUB_BASE_REF}"
+            exit 1
+          fi
+          if [ -n "$(npm view "jj-gh@${HEAD_VERSION}" version 2>/dev/null || true)" ]; then
+            echo "::error::npm already has jj-gh@${HEAD_VERSION}"
+            exit 1
+          fi
+
+      - name: Check
+        run: bun run check
+
+      - name: Run the built file
+        run: ./dist/jj-gh.js --version
+
+  # Publishes the version in package.json when npm doesn't have it yet.
+  cd:
+    name: CD
+    needs: ci
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # For the tag and the GitHub release.
+      id-token: write # npm takes the workflow's identity as its publish credential, so no token is stored.
+
+    concurrency:
+      group: cd
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install tools
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5 # v5.0.0
+
+      # `npm view` prints nothing for a version the registry doesn't have, and fails for a
+      # package it doesn't have. Both leave the output empty.
+      - name: Read the version
+        id: version
+        run: |
+          version=$(jq -r .version package.json)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "published=$(npm view "jj-gh@${version}" version 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        if: steps.version.outputs.published == ''
+        run: bun install --frozen-lockfile
+
+      # bun can't publish with the workflow's identity, so npm does it. `prepack` builds the file.
+      - name: Publish to npm
+        if: steps.version.outputs.published == ''
+        run: npm publish --access public --provenance
+
+      - name: Create the GitHub release
+        if: steps.version.outputs.published == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release create "v${VERSION}" --generate-notes --target "${GITHUB_SHA}"

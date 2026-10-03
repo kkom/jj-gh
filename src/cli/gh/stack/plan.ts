@@ -1,0 +1,116 @@
+import { Option } from "effect";
+
+import type { PullRequestNumber, RemoteStack, StackNumber } from "../../../clients/github/types";
+
+/** The base each branch targets: the trunk under the bottom one, the branch below otherwise. */
+export const basesFor = (branches: readonly string[], trunk: string): readonly string[] => [
+  trunk,
+  ...branches.slice(0, -1),
+];
+
+export type Registration =
+  | {
+      readonly _tag: "Append";
+      readonly pullRequests: readonly PullRequestNumber[];
+      readonly stack: StackNumber;
+    }
+  | { readonly _tag: "Create"; readonly pullRequests: readonly PullRequestNumber[] }
+  | { readonly _tag: "Unchanged" };
+
+/**
+ * Whether the GitHub stack has to be dissolved before the wanted pull requests can be arranged,
+ * bottom to top, where a pull request not opened yet is `none`. GitHub rejects a base change on a
+ * pull request in a stack, and can only add to a stack's top. So the stack stays only where no
+ * base moves, and either its open pull requests are the bottom of what is wanted, or what is
+ * wanted is the bottom of them.
+ */
+export const mustDissolve = (
+  existing: Option.Option<RemoteStack>,
+  wanted: readonly Option.Option<PullRequestNumber>[],
+  basesMove: boolean,
+): boolean => {
+  if (Option.isNone(existing)) {
+    return false;
+  }
+  const { open } = existing.value;
+  const matches = (index: number): boolean => {
+    const pullRequest = wanted[index];
+    return (
+      pullRequest !== undefined && Option.isSome(pullRequest) && pullRequest.value === open[index]
+    );
+  };
+  const shorter = Math.min(open.length, wanted.length);
+  const agree =
+    shorter > 0 &&
+    Array.from({ length: shorter }, (_, index) => index).every((index) => matches(index));
+  return basesMove || !agree;
+};
+
+/**
+ * What makes the pull requests, bottom to top, the open part of one GitHub stack, given the stack
+ * left after any dissolving. A single pull request can't be a stack at all.
+ */
+export const registrationFor = (
+  remaining: Option.Option<RemoteStack>,
+  wanted: readonly PullRequestNumber[],
+): Registration => {
+  if (Option.isNone(remaining)) {
+    return wanted.length > 1 ? { _tag: "Create", pullRequests: wanted } : { _tag: "Unchanged" };
+  }
+  const { number, open } = remaining.value;
+  return wanted.length > open.length
+    ? { _tag: "Append", pullRequests: wanted.slice(open.length), stack: number }
+    : { _tag: "Unchanged" };
+};
+
+/** A change's description split the way a pull request takes it: the first line, then the rest. */
+export const titleAndBody = (
+  description: string,
+): { readonly body: string; readonly title: string } => {
+  const [title = "", ...rest] = description.trimEnd().split("\n");
+  return { body: rest.join("\n").trim(), title };
+};
+
+/** A title and body as one description, with a blank line between, as jj and GitHub both show it. */
+export const descriptionFrom = ({
+  body,
+  title,
+}: {
+  readonly body: string;
+  readonly title: string;
+}): string => (body === "" ? title : `${title}\n\n${body}`);
+
+/**
+ * A description in the one spelling both sides are compared in. GitHub stores a body edited in
+ * the browser with Windows line endings, and jj ends a description with a newline.
+ */
+export const normalizedDescription = (description: string): string =>
+  descriptionFrom(titleAndBody(description.replaceAll("\r\n", "\n")));
+
+export type DescriptionSync =
+  | { readonly _tag: "InSync" }
+  | { readonly _tag: "Merge" }
+  | { readonly _tag: "SendLocal" }
+  | { readonly _tag: "TakeGitHub" };
+
+/**
+ * Which way a description goes, from who changed it since the last push. `pushed` is the
+ * description of the commit last pushed to the branch, which both sides agreed on then.
+ */
+export const descriptionSyncFor = ({
+  local,
+  onGitHub,
+  pushed,
+}: {
+  readonly local: string;
+  readonly onGitHub: string;
+  readonly pushed: string;
+}): DescriptionSync => {
+  if (local === onGitHub) {
+    return { _tag: "InSync" };
+  }
+  if (local === pushed) {
+    return { _tag: "TakeGitHub" };
+  }
+  return onGitHub === pushed ? { _tag: "SendLocal" } : { _tag: "Merge" };
+};

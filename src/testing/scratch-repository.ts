@@ -1,0 +1,268 @@
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import { BunServices } from "@effect/platform-bun";
+import { Layer } from "effect";
+
+import { lines } from "../cli/gh/stack/changes";
+import { type Git, GitLive } from "../clients/git";
+import { type Jj, jjLayer } from "../clients/jj";
+
+/**
+ * A jj repository with `main` pushed to a bare `origin`, for tests that run the real jj. A second,
+ * plain git clone of `origin` stands in for GitHub changing branches by itself.
+ */
+export interface ScratchRepository {
+  /** The names of the branches on `origin`, with the commit each points at. */
+  readonly branches: () => Readonly<Record<string, string>>;
+  /** Runs git in the clone standing in for GitHub. */
+  readonly git: (...args: readonly string[]) => string;
+  /** Runs jj in the repository, and returns what it printed. */
+  readonly jj: (...args: readonly string[]) => string;
+  readonly layer: Layer.Layer<Git | Jj>;
+  /** Each described change above the trunk, bottom to top, as `description [bookmarks]`. */
+  readonly log: () => readonly string[];
+  /** Adds one change per name on top of `main`, each with a file and a bookmark of that name. */
+  readonly stack: (...names: readonly string[]) => void;
+  /** Writes a file into the clone standing in for GitHub. */
+  readonly writeOnGitHub: (file: string, content: string) => void;
+  /** Writes a file into the jj working copy. */
+  readonly write: (file: string, content: string) => void;
+}
+
+// Spotlight on macOS doesn't index a directory named `.noindex`, and each test writes and deletes
+// a few hundred small files.
+const parent = path.join(tmpdir(), "jj-gh-tests.noindex");
+
+const directories: string[] = [];
+
+export const removeScratchRepositories = (): void => {
+  for (const directory of directories.splice(0)) {
+    rmSync(directory, { force: true, recursive: true });
+  }
+};
+
+// The repository in a directory that already holds one: `origin.git`, `repository`, `github`
+// and the jj configuration.
+const open = (root: string): ScratchRepository => {
+  const repository = path.join(root, "repository");
+  const github = path.join(root, "github");
+  // Neither tool reads the configuration of whoever runs the tests.
+  const env = {
+    GIT_AUTHOR_EMAIL: "github@example.com",
+    GIT_AUTHOR_NAME: "GitHub",
+    GIT_COMMITTER_EMAIL: "github@example.com",
+    GIT_COMMITTER_NAME: "GitHub",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_SYSTEM: "/dev/null",
+    JJ_CONFIG: path.join(root, "config.toml"),
+  };
+
+  const execute = (cwd: string, command: readonly string[]): string => {
+    const result = Bun.spawnSync([...command], { cwd, env: { ...Bun.env, ...env } });
+    if (result.exitCode !== 0) {
+      throw new Error(`${command.join(" ")} failed:\n${result.stderr.toString()}`);
+    }
+    return result.stdout.toString();
+  };
+  const jj = (...args: readonly string[]): string => execute(repository, ["jj", ...args]);
+  const git = (...args: readonly string[]): string => execute(github, ["git", ...args]);
+  const write = (file: string, content: string): void => {
+    writeFileSync(path.join(repository, file), content);
+  };
+
+  return {
+    branches: () =>
+      Object.fromEntries(
+        lines(git("ls-remote", "--heads", "origin")).map((line) => {
+          const [commit = "", ref = ""] = line.split("\t");
+          return [ref.replace("refs/heads/", ""), commit];
+        }),
+      ),
+    git,
+    jj,
+    layer: Layer.merge(GitLive, jjLayer({ cwd: repository, env, quiet: true })).pipe(
+      Layer.provide(BunServices.layer),
+    ),
+    log: () =>
+      lines(
+        jj(
+          "log",
+          "--no-graph",
+          "--reversed",
+          "-r",
+          'trunk().. ~ description(exact:"")',
+          "-T",
+          String.raw`description.first_line() ++ " [" ++ local_bookmarks.map(|b| b.name()).join(",") ++ "]\n"`,
+        ),
+      ),
+    stack: (...names) => {
+      jj("new", "main");
+      for (const name of names) {
+        jj("describe", "-m", name);
+        write(`${name}.txt`, `${name}\n`);
+        jj("bookmark", "create", name, "-r", "@");
+        jj("new");
+      }
+    },
+    write,
+    writeOnGitHub: (file, content) => {
+      writeFileSync(path.join(github, file), content);
+    },
+  };
+};
+
+// Running jj and git a dozen times per test is most of what the tests cost, so each kind of
+// repository is built once per run and copied. The two git configurations hold the path of
+// `origin.git`, which is rewritten to the copy's.
+const templates = new Map<string, string>();
+
+const templateOf = (name: string, build: (root: string) => void): string => {
+  mkdirSync(parent, { recursive: true });
+  let template = templates.get(name);
+  if (template === undefined) {
+    template = mkdtempSync(path.join(parent, `template-${name}-`));
+    templates.set(name, template);
+    build(template);
+  }
+  return template;
+};
+
+const duplicate = (from: string, to: string): void => {
+  cpSync(from, to, { preserveTimestamps: true, recursive: true });
+  for (const config of ["repository/.git/config", "github/.git/config"]) {
+    const file = path.join(to, config);
+    writeFileSync(file, readFileSync(file, "utf8").replaceAll(from, to));
+  }
+};
+
+const copyOf = (template: string): string => {
+  const root = mkdtempSync(path.join(parent, "repository-"));
+  directories.push(root);
+  duplicate(template, root);
+  return root;
+};
+
+process.on("exit", () => {
+  for (const template of templates.values()) {
+    rmSync(template, { force: true, recursive: true });
+  }
+});
+
+const buildBase = (root: string): void => {
+  writeFileSync(
+    path.join(root, "config.toml"),
+    '[user]\nname = "Test"\nemail = "test@example.com"\n',
+  );
+  mkdirSync(path.join(root, "repository"));
+  const { jj, write } = open(root);
+  Bun.spawnSync(["git", "init", "--quiet", "--bare", "--initial-branch=main", "origin.git"], {
+    cwd: root,
+  });
+  jj("git", "init", "--colocate");
+  jj("git", "remote", "add", "origin", path.join(root, "origin.git"));
+  jj("describe", "-m", "base");
+  write("base.txt", "base\n");
+  jj("bookmark", "create", "main", "-r", "@");
+  jj("git", "push", "--bookmark", "main");
+  Bun.spawnSync(["git", "clone", "--quiet", path.join(root, "origin.git"), "github"], {
+    cwd: root,
+  });
+};
+
+const baseTemplate = (): string => templateOf("base", buildBase);
+
+/** A repository with only `main`, pushed. */
+export const scratchRepository = (): ScratchRepository => open(copyOf(baseTemplate()));
+
+/** A repository with one change per name stacked on `main`, each pushed with its bookmark. */
+export const pushedStack = (...names: readonly string[]): ScratchRepository =>
+  open(
+    copyOf(
+      templateOf(`pushed-${names.join("-")}`, (root) => {
+        duplicate(baseTemplate(), root);
+        const built = open(root);
+        built.stack(...names);
+        built.jj("git", "push", ...names.flatMap((name) => ["--bookmark", name]));
+      }),
+    ),
+  );
+
+// What GitHub does to branches by itself, done in the clone and pushed to `origin`.
+
+/** Adds a commit to a branch, as applying a review suggestion does. */
+export const addCommitOnGitHub = (
+  repository: ScratchRepository,
+  branch: string,
+  file = "suggestion.txt",
+): void => {
+  repository.git("fetch", "--quiet");
+  repository.git("checkout", "--quiet", "-B", branch, `origin/${branch}`);
+  repository.writeOnGitHub(file, "suggestion\n");
+  repository.git("add", ".");
+  repository.git("commit", "--quiet", "-m", "apply a suggestion");
+  repository.git("push", "--quiet", "origin", branch);
+};
+
+/** Adds a commit to `main`. */
+export const moveTrunkOnGitHub = (repository: ScratchRepository): void => {
+  repository.git("fetch", "--quiet");
+  repository.git("checkout", "--quiet", "-B", "main", "origin/main");
+  repository.writeOnGitHub("trunk.txt", "trunk\n");
+  repository.git("add", ".");
+  repository.git("commit", "--quiet", "-m", "trunk moves");
+  repository.git("push", "--quiet", "origin", "main");
+};
+
+/**
+ * Moves `main`, then rebases a branch onto it and force-pushes it, as the "Update branch" button
+ * does. With `extra`, the rewritten commit also gets a file the branch didn't have.
+ */
+export const rebaseOnGitHub = (
+  repository: ScratchRepository,
+  branch: string,
+  { extra = false }: { readonly extra?: boolean } = {},
+): void => {
+  moveTrunkOnGitHub(repository);
+  repository.git("checkout", "--quiet", "-B", branch, `origin/${branch}`);
+  repository.git("rebase", "--quiet", "main");
+  if (extra) {
+    repository.writeOnGitHub("extra.txt", "extra\n");
+    repository.git("add", ".");
+    repository.git("commit", "--quiet", "--amend", "--no-edit");
+  }
+  repository.git("push", "--quiet", "--force", "origin", branch);
+};
+
+/**
+ * Squash-merges a branch into `main`. With `deleted`, also deletes the branch, and rebases the
+ * branches above it onto the new `main` in order, as GitHub does for the rest of a stack.
+ */
+export const squashMergeOnGitHub = (
+  repository: ScratchRepository,
+  branch: string,
+  {
+    above = [],
+    deleted = true,
+  }: { readonly above?: readonly string[]; readonly deleted?: boolean } = {},
+): void => {
+  repository.git("fetch", "--quiet");
+  repository.git("checkout", "--quiet", "-B", "main", "origin/main");
+  repository.git("merge", "--quiet", "--squash", `origin/${branch}`);
+  repository.git("commit", "--quiet", "-m", `${branch} (#1)`);
+  repository.git("push", "--quiet", "origin", "main");
+  let below = repository.git("rev-parse", `origin/${branch}`).trim();
+  let base = "main";
+  for (const name of above) {
+    const pushed = repository.git("rev-parse", `origin/${name}`).trim();
+    repository.git("checkout", "--quiet", "-B", name, pushed);
+    repository.git("rebase", "--quiet", "--onto", base, below, name);
+    repository.git("push", "--quiet", "--force", "origin", name);
+    below = pushed;
+    base = name;
+  }
+  if (deleted) {
+    repository.git("push", "--quiet", "origin", "--delete", branch);
+  }
+};

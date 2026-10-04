@@ -1,0 +1,7 @@
+dist/
+node_modules/
+*.log
+*.tgz
+*.tsbuildinfo
+.DS_Store
+/.jj/

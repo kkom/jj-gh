@@ -1,21 +1,21 @@
 {
-  "name": "jj-gh",
-  "version": "0.0.2",
+  "name": "jj-octo",
+  "version": "0.1.0",
   "description": "A jj subcommand for working with GitHub that supports stacking",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kkom/jj-gh.git"
+    "url": "git+https://github.com/kkom/jj-octo.git"
   },
   "bin": {
-    "jj-gh": "dist/jj-gh.js"
+    "jj-octo": "dist/jj-octo.js"
   },
   "files": [
-    "dist/jj-gh.js"
+    "dist/jj-octo.js"
   ],
   "type": "module",
   "scripts": {
-    "build": "bun build src/main.ts --target=bun --outfile dist/jj-gh.js && chmod +x dist/jj-gh.js",
+    "build": "bun build src/main.ts --target=bun --outfile dist/jj-octo.js && chmod +x dist/jj-octo.js",
     "check": "bun run --sequential \"check:*\" && bun run test && bun run build",
     "check:format": "oxfmt --check .",
     "check:lint": "oxlint .",

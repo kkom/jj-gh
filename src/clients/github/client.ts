@@ -60,7 +60,7 @@ export class GitHub extends Context.Service<
     /** Dissolves the stack. Its pull requests stay open. */
     readonly unstack: (stack: StackNumber) => Effect.Effect<void, GitHubFailed>;
   }
->()("jj-gh/GitHub") {}
+>()("jj-octo/GitHub") {}
 
 const CreatedPullRequest = responseOf<"pulls/create">()(
   Schema.Struct({ number: PullRequestNumberSchema }),
@@ -142,7 +142,7 @@ export const GitHubLive = (
             HttpClientRequest.acceptJson,
             HttpClientRequest.bearerToken(bearer),
             HttpClientRequest.setHeaders({
-              "user-agent": "jj-gh",
+              "user-agent": "jj-octo",
               "x-github-api-version": "2022-11-28",
             }),
           ),

@@ -1,9 +1,9 @@
-# jj-gh
+# jj-octo
 
 A [jj](https://github.com/jj-vcs/jj) subcommand for working with GitHub that supports stacking.
 
 > [!WARNING]
-> `jj-gh` is in early development, and its commands may change. So far it is largely vibe coded.
+> `jj-octo` is in early development, and its commands may change. So far it is largely vibe coded.
 
 ## Usage
 
@@ -11,17 +11,17 @@ Run `jj gh --help` to list the commands.
 
 ## Install
 
-`jj-gh` runs on [bun](https://bun.sh), and calls `jj`. Both must be on `PATH`.
+`jj-octo` runs on [bun](https://bun.sh), and calls `jj`. Both must be on `PATH`.
 
 ### For one repository
 
-With [mise](https://mise.jdx.dev), in the repository's `mise.toml`, where `A.B.C` is a bun version and `X.Y.Z` a [released version](https://www.npmjs.com/package/jj-gh?activeTab=versions) of `jj-gh`:
+With [mise](https://mise.jdx.dev), in the repository's `mise.toml`, where `A.B.C` is a bun version and `X.Y.Z` a [released version](https://www.npmjs.com/package/jj-octo?activeTab=versions) of `jj-octo`:
 
 ```toml
 [tools]
 bun = "A.B.C"
 
-[tools."npm:jj-gh"]
+[tools."npm:jj-octo"]
 version = "X.Y.Z"
 # mise holds back a package that is new or rarely downloaded, and this approves it.
 allow_low_downloads = true
@@ -30,25 +30,25 @@ allow_low_downloads = true
 Then make it a jj subcommand. The alias isn't committed, so run this once in each checkout:
 
 ```
-jj config set --repo aliases.gh '["util", "exec", "--", "jj-gh"]'
+jj config set --repo aliases.gh '["util", "exec", "--", "jj-octo"]'
 ```
 
 ### For every repository
 
 ```
-bun install --global jj-gh
-jj config set --user aliases.gh '["util", "exec", "--", "jj-gh"]'
+bun install --global jj-octo
+jj config set --user aliases.gh '["util", "exec", "--", "jj-octo"]'
 ```
 
 To update it later:
 
 ```
-bun update --global --latest jj-gh
+bun update --global --latest jj-octo
 ```
 
 ## GitHub access
 
-`jj-gh` reads the repository from the `origin` remote. It takes its token from `GH_TOKEN` or `GITHUB_TOKEN`, and otherwise from `gh auth token`.
+`jj-octo` reads the repository from the `origin` remote. It takes its token from `GH_TOKEN` or `GITHUB_TOKEN`, and otherwise from `gh auth token`.
 
 It uses only GitHub's REST API, so that it works in a [Claude Code](https://claude.com/claude-code) cloud session. There, GitHub is reached through a proxy that allows REST calls for the session's repository and blocks GraphQL, which `gh pr` depends on.
 

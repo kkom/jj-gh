@@ -1,4 +1,4 @@
-name: jj-gh
+name: jj-octo
 
 on:
   pull_request:
@@ -45,8 +45,8 @@ jobs:
             echo "::error::version ${HEAD_VERSION} isn't higher than ${BASE_VERSION} on ${GITHUB_BASE_REF}"
             exit 1
           fi
-          if [ -n "$(npm view "jj-gh@${HEAD_VERSION}" version 2>/dev/null || true)" ]; then
-            echo "::error::npm already has jj-gh@${HEAD_VERSION}"
+          if [ -n "$(npm view "jj-octo@${HEAD_VERSION}" version 2>/dev/null || true)" ]; then
+            echo "::error::npm already has jj-octo@${HEAD_VERSION}"
             exit 1
           fi
 
@@ -54,7 +54,7 @@ jobs:
         run: bun run check
 
       - name: Run the built file
-        run: ./dist/jj-gh.js --version
+        run: ./dist/jj-octo.js --version
 
   # Publishes the version in package.json when npm doesn't have it yet.
   cd:
@@ -84,7 +84,7 @@ jobs:
         run: |
           version=$(jq -r .version package.json)
           echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "published=$(npm view "jj-gh@${version}" version 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+          echo "published=$(npm view "jj-octo@${version}" version 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         if: steps.version.outputs.published == ''

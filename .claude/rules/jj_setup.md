@@ -8,3 +8,5 @@ Here `jj gh` is a jj alias for this repository's own CLI, run from source, so a 
 bun src/main.ts init
 jj config set --repo aliases.gh "[\"util\", \"exec\", \"--\", \"bun\", \"$PWD/src/main.ts\"]"
 ```
+
+`.claude/hooks/session-start.sh` runs both commands in a Claude Code cloud session whose environment runs each checkout's session-start hook.

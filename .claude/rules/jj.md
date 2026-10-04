@@ -67,6 +67,10 @@ A change dropped from the stack leaves its pull request open, for closing by han
 
 ## Merging
 
+Merge with `jj gh merge`, not `gh pr merge` or GitHub's merge button. That's because only `jj gh merge` syncs the checkout afterwards and republishes the rest of the stack.
+
+Merge separate stacks one at a time. Each merge rebases the other stacks onto the new trunk, so run `jj gh submit` on the next stack before merging it.
+
 `merge` fails before merging if the change named, or one below it, has edits that aren't pushed. Run `submit` first.
 
 `merge` squash-merges everything up to and including the pull request of the change named, in one operation that merges all of it or none of it, and GitHub rebases the pull requests above onto the result itself. `merge` then runs `sync`, which fetches and rebases every local stack onto the new trunk. A merged change is empty after the rebase, so it's abandoned, and `sync` forgets its bookmark, whether or not GitHub has deleted the branch yet. Unlike `sync` run alone, this rebases the merged change's stack even where it conflicts with the trunk. `merge` then republishes what was already on GitHub of the changes left in that stack, and leaves unpublished changes local.

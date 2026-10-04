@@ -51,9 +51,11 @@ jj records every file in the checkout that isn't ignored, so a scratch file writ
 
 `jj gh sync` keeps every stack current with `main`; the longer one lags, the worse the conflicts. It pushes nothing, so run `jj gh submit` afterwards on a stack whose pull requests should be updated.
 
+`sync` leaves a stack where it was if rebasing it would conflict with the trunk, and prints its name. Rebase that stack with `jj rebase` when you're ready to resolve the conflict. Commits added to a branch on GitHub are squashed into the branch's local change.
+
 ## Publishing
 
-`submit` pushes every branch of the stack, opens the missing pull requests as drafts titled and described by their changes, points each at the branch below it, and registers them as one GitHub stack. A stack of one is a single pull request, which GitHub has no stack for. Then publish the pull requests with `gh pr ready`, as `github.md` describes.
+`submit` pushes every branch of the stack, opens the missing pull requests as drafts titled and described by their changes, points each at the branch below it, and registers them as one GitHub stack. A stack of one is a single pull request, which GitHub has no stack for. Then publish the pull requests with `gh pr ready`, as `github.md` describes. `submit --publish` opens new pull requests ready for review instead of as drafts, and doesn't change one that already exists.
 
 `submit` keeps each pull request's title and body the same as its change's description. So write the description the PR template asks for with `jj describe`, or edit it on GitHub, and run `submit` again. An edit made on GitHub is written into the change, one made locally is sent to the pull request, and edits on both sides are merged line by line. Edits to the same lines stop `submit` before it pushes, and it prints both versions.
 
@@ -65,6 +67,8 @@ A change dropped from the stack leaves its pull request open, for closing by han
 
 ## Merging
 
-`merge` squash-merges everything up to and including the pull request of the change named, in one operation that merges all of it or none of it, and GitHub rebases the pull requests above onto the result itself. `merge` then runs `sync`, which fetches and rebases every local stack onto the new trunk. A merged change is empty after the rebase, so it's abandoned, and `sync` forgets its bookmark, whether or not GitHub has deleted the branch yet. `merge` then republishes what was already on GitHub of the stack containing the working copy, and leaves unpublished changes local.
+`merge` fails before merging if the change named, or one below it, has edits that aren't pushed. Run `submit` first.
+
+`merge` squash-merges everything up to and including the pull request of the change named, in one operation that merges all of it or none of it, and GitHub rebases the pull requests above onto the result itself. `merge` then runs `sync`, which fetches and rebases every local stack onto the new trunk. A merged change is empty after the rebase, so it's abandoned, and `sync` forgets its bookmark, whether or not GitHub has deleted the branch yet. Unlike `sync` run alone, this rebases the merged change's stack even where it conflicts with the trunk. `merge` then republishes what was already on GitHub of the changes left in that stack, and leaves unpublished changes local.
 
 Don't use the `gh stack` extension. Its local commands keep their own record of the stack in `.git/gh-stack` and move branches without jj knowing, and `jj gh` already does its GitHub work over REST.

@@ -33,7 +33,7 @@ export interface ScratchRepository {
 
 // Spotlight on macOS doesn't index a directory named `.noindex`, and each test writes and deletes
 // a few hundred small files.
-const parent = path.join(tmpdir(), "jj-gh-tests.noindex");
+const parent = path.join(tmpdir(), "jj-octo-tests.noindex");
 
 const directories: string[] = [];
 

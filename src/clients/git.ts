@@ -16,7 +16,7 @@ export class Git extends Context.Service<
       readonly remote: string;
     }) => Effect.Effect<{ readonly conflicted: boolean; readonly text: string }, GitFailed>;
   }
->()("jj-gh/Git") {}
+>()("jj-octo/Git") {}
 
 export const GitLive = Layer.effect(
   Git,

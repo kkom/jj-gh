@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "jj-gh",
+      "name": "jj-octo",
       "devDependencies": {
         "@effect/platform-bun": "4.0.0-rc.118",
         "@octokit/openapi-types": "29.0.1",

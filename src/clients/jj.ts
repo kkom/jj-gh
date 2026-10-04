@@ -11,7 +11,7 @@ export class Jj extends Context.Service<
     /** Runs a jj command that changes something, showing its output as it goes. */
     readonly run: (args: readonly string[]) => Effect.Effect<void, JjFailed>;
   }
->()("jj-gh/Jj") {}
+>()("jj-octo/Jj") {}
 
 // What jj printed says what went wrong, so it's the message. The command is named only where jj
 // printed nothing to this program: it failed to start, or its output went to the terminal.

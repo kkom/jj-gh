@@ -5,14 +5,14 @@ import { Option } from "effect";
 import { repositoryFromUrl } from "./repository";
 
 describe("repositoryFromUrl", () => {
-  it.each(["https://github.com/kkom/jj-gh", "https://github.com/kkom/jj-gh.git"])(
+  it.each(["https://github.com/kkom/jj-octo", "https://github.com/kkom/jj-octo.git"])(
     "reads %s",
     (url) => {
-      expect(repositoryFromUrl(url)).toEqual(Option.some({ name: "jj-gh", owner: "kkom" }));
+      expect(repositoryFromUrl(url)).toEqual(Option.some({ name: "jj-octo", owner: "kkom" }));
     },
   );
 
   it("reads nothing from a remote elsewhere", () => {
-    expect(repositoryFromUrl("https://gitlab.com/kkom/jj-gh")).toEqual(Option.none());
+    expect(repositoryFromUrl("https://gitlab.com/kkom/jj-octo")).toEqual(Option.none());
   });
 });

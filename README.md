@@ -27,11 +27,13 @@ version = "X.Y.Z"
 allow_low_downloads = true
 ```
 
-Then make it a jj subcommand. The alias isn't committed, so run this once in each checkout:
+Then set up each checkout, since jj doesn't read config from a committed file:
 
 ```
-jj config set --repo aliases.gh '["util", "exec", "--", "jj-octo"]'
+jj-octo init
 ```
+
+It makes the checkout a jj repository colocated with git, makes GitHub's default branch `trunk()`, and sets the `jj gh` alias.
 
 ### For every repository
 
@@ -39,6 +41,8 @@ jj config set --repo aliases.gh '["util", "exec", "--", "jj-octo"]'
 bun install --global jj-octo
 jj config set --user aliases.gh '["util", "exec", "--", "jj-octo"]'
 ```
+
+Then run `jj-octo init` once in each checkout, as above.
 
 To update it later:
 

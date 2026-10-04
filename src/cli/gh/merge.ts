@@ -19,6 +19,7 @@ import {
   upstackRevset,
 } from "./stack/changes";
 import { type PublishFailed, republish } from "./stack/publish";
+import { checkTrunk } from "./stack/trunk";
 import { type NotCombined, sync } from "./sync";
 
 export class NotMergeable extends Data.TaggedError("NotMergeable")<{
@@ -41,7 +42,7 @@ const openPullRequestOf = (bookmark: string) =>
   });
 
 /** Merges the pull request, and returns whether it has merged or is only queued to. */
-const mergeOnGitHub = ({ base, number }: PullRequest) =>
+const mergeOnGitHub = ({ base, number }: PullRequest, trunk: string) =>
   Effect.gen(function* () {
     const github = yield* GitHub;
     const stack = yield* github.stackOf(number);
@@ -52,7 +53,7 @@ const mergeOnGitHub = ({ base, number }: PullRequest) =>
     }
     // Outside a GitHub stack a merge goes into the pull request's base, and takes nothing below
     // it along.
-    if (base !== (yield* github.defaultBranch)) {
+    if (base !== trunk) {
       return yield* new NotMergeable({
         message: `#${number} isn't in a GitHub stack, and its base is ${base}, so merging it wouldn't reach the trunk; run \`jj gh submit\` to register the stack, or merge the changes below it first`,
       });
@@ -72,6 +73,8 @@ export const merge = (
   revision: string,
 ): Effect.Effect<void, NotCombined | NotMergeable | PublishFailed, Git | GitHub | Jj> =>
   Effect.gen(function* () {
+    const trunk = yield* (yield* GitHub).defaultBranch;
+    yield* checkTrunk(trunk);
     const changes = yield* downstackChanges(revision);
     const top = changes.at(-1)?.bookmark ?? "";
 
@@ -90,7 +93,7 @@ export const merge = (
     const above = yield* bookmarksAt(upstackRevset(bookmarkRevset(top)));
     const stackChanges = yield* changeIdsAt(stackRevset(revision));
 
-    if ((yield* mergeOnGitHub(pullRequest)) === "enqueued") {
+    if ((yield* mergeOnGitHub(pullRequest, trunk)) === "enqueued") {
       yield* Console.error("queued to merge; run `jj gh sync` once it has");
     } else {
       yield* Console.error(`merged up to #${pullRequest.number}`);

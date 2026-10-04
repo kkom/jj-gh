@@ -1,6 +1,8 @@
 import { Console, Data, Effect } from "effect";
 import { Command } from "effect/cli";
 
+import { GitHub } from "../../clients/github/client";
+import { GitHubFromOrigin } from "../../clients/github/origin";
 import { Jj, type JjFailed } from "../../clients/jj";
 import { asUserError, withHelp } from "../command";
 import {
@@ -15,6 +17,7 @@ import {
   STACK_ROOTS,
   stackRevset,
 } from "./stack/changes";
+import { checkTrunk } from "./stack/trunk";
 
 // A stack already on the trunk has nothing to rebase.
 const BEHIND_ROOTS = `(${STACK_ROOTS}) ~ children(trunk())`;
@@ -208,12 +211,20 @@ export const sync = (
     }
   });
 
-export const syncCommand = Command.make("sync", {}, () => asUserError(sync())).pipe(
+export const syncCommand = Command.make("sync", {}, () =>
+  asUserError(
+    Effect.gen(function* () {
+      yield* checkTrunk(yield* (yield* GitHub).defaultBranch);
+      yield* sync();
+    }).pipe(Effect.provide(GitHubFromOrigin)),
+  ),
+).pipe(
   withHelp(
     "Fetch, and rebase every change onto the trunk",
     "Fetches, then rebases every change that isn't merged yet onto the trunk, keeping each on the changes below it. A change that has merged is empty after the rebase, so it's abandoned and its bookmark forgotten.",
     "A stack that would conflict with the trunk is left where it was, and named. Rebase it yourself with `jj rebase` when you want to resolve it.",
     "Commits added to a branch on GitHub are squashed into the branch's local change, whether or not that change was also edited locally. Where GitHub only rebased a branch, the local change is kept.",
+    "Fails before fetching if `trunk()` isn't GitHub's default branch, which `jj gh init` sets.",
     "Pushes nothing. Run `jj gh submit` to update the pull requests of a change and the ones below it.",
   ),
 );

@@ -15,6 +15,7 @@ import {
 } from "./changes";
 import { type DescriptionConflict, descriptionsOf, syncDescription } from "./descriptions";
 import { basesFor, mustDissolve, registrationFor, titleAndBody } from "./plan";
+import { checkTrunk, type TrunkMismatch } from "./trunk";
 
 export class SeveralStacks extends Data.TaggedError("SeveralStacks")<{
   readonly message: string;
@@ -76,7 +77,8 @@ export type PublishFailed =
   | GitHubFailed
   | JjFailed
   | NotAStack
-  | SeveralStacks;
+  | SeveralStacks
+  | TrunkMismatch;
 
 /**
  * Pushes the changes' bookmarks, opens the pull requests missing, sets their bases, and registers
@@ -190,7 +192,10 @@ export const submit = (
   revision: string,
   options: PublishOptions,
 ): Effect.Effect<void, PublishFailed, Git | GitHub | Jj> =>
-  downstackChanges(revision).pipe(Effect.flatMap((stack) => publish(stack, options)));
+  Effect.gen(function* () {
+    yield* checkTrunk(yield* (yield* GitHub).defaultBranch);
+    yield* publish(yield* downstackChanges(revision), options);
+  });
 
 /**
  * Publishes the stack containing the revision again, up to the highest bookmark already pushed, so

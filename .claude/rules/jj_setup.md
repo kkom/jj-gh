@@ -2,8 +2,9 @@
 
 ## The `jj gh` alias
 
-Here `jj gh` is a jj alias for this repository's own CLI, run from source, so a change to the CLI takes effect in the next command. Set it once per checkout, from the checkout's root:
+Here `jj gh` is a jj alias for this repository's own CLI, run from source, so a change to the CLI takes effect in the next command. Set the checkout up once, from its root. `init` sets the alias to the released `jj-octo`, so the second command points it back at the source:
 
 ```
+bun src/main.ts init
 jj config set --repo aliases.gh "[\"util\", \"exec\", \"--\", \"bun\", \"$PWD/src/main.ts\"]"
 ```

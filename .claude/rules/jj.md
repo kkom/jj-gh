@@ -38,6 +38,7 @@ All of them run from any directory of the checkout, and `jj help <command>` cove
 | `jj abandon <change>` | Drops a change, rebasing its descendants onto its parent |
 | `jj log -r 'trunk()::'` | Shows the stacks |
 | `jj undo` | Undoes the last operation, whatever it was |
+| `jj gh init` | Sets up a checkout: colocates jj with git, makes GitHub's default branch `trunk()` and sets the `jj gh` alias |
 | `jj gh log` | Shows the stack's changes, their pull requests and whether each is pushed |
 | `jj gh submit` | Pushes the working copy's change and the ones below it, and makes their pull requests one GitHub stack |
 | `jj gh merge -r <change>` | Merges the pull requests of that change and the ones below it, then syncs and republishes the rest of the stack |

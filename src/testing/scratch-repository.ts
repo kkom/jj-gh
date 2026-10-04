@@ -6,7 +6,7 @@ import { BunServices } from "@effect/platform-bun";
 import { Layer } from "effect";
 
 import { lines } from "../cli/gh/stack/changes";
-import { type Git, GitLive } from "../clients/git";
+import { type Git, gitLayer } from "../clients/git";
 import { type Jj, jjLayer } from "../clients/jj";
 
 /**
@@ -37,35 +37,63 @@ const parent = path.join(tmpdir(), "jj-octo-tests.noindex");
 
 const directories: string[] = [];
 
+/** A new directory, removed by `removeScratchRepositories`. */
+export const scratchDirectory = (prefix: string): string => {
+  mkdirSync(parent, { recursive: true });
+  const directory = mkdtempSync(path.join(parent, prefix));
+  directories.push(directory);
+  return directory;
+};
+
 export const removeScratchRepositories = (): void => {
   for (const directory of directories.splice(0)) {
     rmSync(directory, { force: true, recursive: true });
   }
 };
 
-// The repository in a directory that already holds one: `origin.git`, `repository`, `github`
-// and the jj configuration.
-const open = (root: string): ScratchRepository => {
-  const repository = path.join(root, "repository");
-  const github = path.join(root, "github");
-  // Neither tool reads the configuration of whoever runs the tests.
-  const env = {
-    GIT_AUTHOR_EMAIL: "github@example.com",
-    GIT_AUTHOR_NAME: "GitHub",
-    GIT_COMMITTER_EMAIL: "github@example.com",
-    GIT_COMMITTER_NAME: "GitHub",
-    GIT_CONFIG_GLOBAL: "/dev/null",
-    GIT_CONFIG_SYSTEM: "/dev/null",
-    JJ_CONFIG: path.join(root, "config.toml"),
-  };
+/**
+ * The environment that keeps git and jj from reading the configuration of whoever runs the tests.
+ * jj reads `config.toml` in the root instead.
+ */
+export const isolatedEnv = (root: string): Readonly<Record<string, string>> => ({
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_SYSTEM: "/dev/null",
+  JJ_CONFIG: path.join(root, "config.toml"),
+});
 
-  const execute = (cwd: string, command: readonly string[]): string => {
+/** Runs a command in a directory with the environment, and returns what it printed. */
+export const executor =
+  (env: Readonly<Record<string, string>>) =>
+  (cwd: string, command: readonly string[]): string => {
     const result = Bun.spawnSync([...command], { cwd, env: { ...Bun.env, ...env } });
     if (result.exitCode !== 0) {
       throw new Error(`${command.join(" ")} failed:\n${result.stderr.toString()}`);
     }
     return result.stdout.toString();
   };
+
+/** The git and jj clients, running in a directory with the environment. */
+export const layerAt = (
+  cwd: string,
+  env: Readonly<Record<string, string>>,
+): Layer.Layer<Git | Jj> =>
+  Layer.merge(gitLayer({ cwd, env }), jjLayer({ cwd, env, quiet: true })).pipe(
+    Layer.provide(BunServices.layer),
+  );
+
+// The repository in a directory that already holds one: `origin.git`, `repository`, `github`
+// and the jj configuration.
+const open = (root: string): ScratchRepository => {
+  const repository = path.join(root, "repository");
+  const github = path.join(root, "github");
+  const env = {
+    ...isolatedEnv(root),
+    GIT_AUTHOR_EMAIL: "github@example.com",
+    GIT_AUTHOR_NAME: "GitHub",
+    GIT_COMMITTER_EMAIL: "github@example.com",
+    GIT_COMMITTER_NAME: "GitHub",
+  };
+  const execute = executor(env);
   const jj = (...args: readonly string[]): string => execute(repository, ["jj", ...args]);
   const git = (...args: readonly string[]): string => execute(github, ["git", ...args]);
   const write = (file: string, content: string): void => {
@@ -82,9 +110,7 @@ const open = (root: string): ScratchRepository => {
       ),
     git,
     jj,
-    layer: Layer.merge(GitLive, jjLayer({ cwd: repository, env, quiet: true })).pipe(
-      Layer.provide(BunServices.layer),
-    ),
+    layer: layerAt(repository, env),
     log: () =>
       lines(
         jj(
@@ -138,8 +164,7 @@ const duplicate = (from: string, to: string): void => {
 };
 
 const copyOf = (template: string): string => {
-  const root = mkdtempSync(path.join(parent, "repository-"));
-  directories.push(root);
+  const root = scratchDirectory("repository-");
   duplicate(template, root);
   return root;
 };

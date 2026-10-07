@@ -141,7 +141,7 @@ describe("descriptionSyncFor", () => {
     ["TakeGitHub", "old", "new"],
     ["SendLocal", "new", "old"],
     ["Merge", "mine", "theirs"],
-  ])("is %s for local %p and GitHub %p, pushed as old", (tag, local, onGitHub) => {
-    expect(descriptionSyncFor({ local, onGitHub, pushed: "old" })).toMatchObject({ _tag: tag });
+  ] as const)("is %s for local %p and GitHub %p, pushed as old", (tag, local, onGitHub) => {
+    expect(descriptionSyncFor({ local, onGitHub, pushed: "old" })).toStrictEqual({ _tag: tag });
   });
 });

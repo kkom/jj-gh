@@ -32,6 +32,95 @@
     "no-map-spread": "off",
     "no-optional-chaining": "off",
     "no-rest-spread-properties": "off",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "importNames": ["mock", "spyOn"],
+            "message": "Use a fake, injected through a layer or a parameter (testing.md).",
+            "name": "bun:test",
+          },
+        ],
+      },
+    ],
+    // Without an object, a restriction matches the property on any object, so it also
+    // catches a matcher behind `.not`, `.resolves` or `expect.soft`.
+    "no-restricted-properties": [
+      "error",
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toMatchObject",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "objectContaining",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "arrayContaining",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toHaveBeenCalled",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toHaveBeenCalledTimes",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toHaveBeenCalledWith",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toHaveBeenLastCalledWith",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toHaveBeenNthCalledWith",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toHaveLastReturnedWith",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toHaveNthReturnedWith",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toHaveReturned",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toHaveReturnedTimes",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toHaveReturnedWith",
+      },
+      {
+        "message": "Use a fake, injected through a layer or a parameter (testing.md).",
+        "object": "vi",
+        "property": "doMock",
+      },
+      {
+        "message": "Use a fake, injected through a layer or a parameter (testing.md).",
+        "object": "vi",
+        "property": "fn",
+      },
+      {
+        "message": "Use a fake, injected through a layer or a parameter (testing.md).",
+        "object": "vi",
+        "property": "mock",
+      },
+      {
+        "message": "Use a fake, injected through a layer or a parameter (testing.md).",
+        "object": "vi",
+        "property": "spyOn",
+      },
+    ],
     "no-ternary": "off",
     // Reads no environment, so every hit is a platform global; tsc has the lib.
     "no-undef": "off",

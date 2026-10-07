@@ -44,3 +44,16 @@ That's because a written-in value checks the field exactly. A matcher also keeps
 - ❌ `id: expect.any(String)`, where the test already has `created.id`
 - ✅ `requestId: expect.stringMatching(UUID)`, where the code generates the id internally and the test isn't about it
 - ✅ `assert event == {"id": IsUUID, "sent_at": IsNow(tz="UTC")}` in Python
+
+## Disable the TypeScript lint ban only for a deliberate use
+
+In TypeScript, oxlint's `no-restricted-properties` and `no-restricted-imports` rules fail on these, in any file:
+
+- Partial matchers: `toMatchObject`, `objectContaining` and `arrayContaining`.
+- Mock-call matchers: `toHaveBeenCalled`, `toHaveBeenCalledTimes`, `toHaveBeenCalledWith`, `toHaveBeenLastCalledWith`, `toHaveBeenNthCalledWith`, `toHaveReturned`, `toHaveReturnedTimes`, `toHaveReturnedWith`, `toHaveLastReturnedWith` and `toHaveNthReturnedWith`.
+- Mocking APIs: `vi.mock`, `vi.doMock`, `vi.fn` and `vi.spyOn`, and `mock` and `spyOn` imported from `bun:test`.
+
+Where a test needs one of them, disable the rule on that line, and say why in the comment. That's because the comment tells a reviewer the use is deliberate, rather than a check someone skipped.
+
+- ❌ `// oxlint-disable-next-line no-restricted-properties`
+- ✅ `// oxlint-disable-next-line no-restricted-properties -- the patched comparison inside objectContaining is what's tested`

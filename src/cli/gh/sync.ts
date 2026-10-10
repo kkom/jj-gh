@@ -143,6 +143,7 @@ const rebaseStack = (root: string, required: readonly string[]) =>
     const [name = root] = yield* changesIn(root);
     const changes = yield* changeIdsAt(stack);
     const conflicted = yield* changeIdsAt(`conflicts() & (${stack})`);
+    const conflictedCommits = yield* commitsAt("conflicts() & mutable()");
     const [operation = ""] = lines(
       yield* jj.read([
         "operation",
@@ -155,9 +156,13 @@ const rebaseStack = (root: string, required: readonly string[]) =>
       ]),
     );
     yield* jj.run(["rebase", "--source", root, "--destination", "trunk()", "--skip-emptied"]);
-    // A merged change is abandoned by the rebase, so its id may be gone.
-    const rebased = ["none()", ...changes.map((change) => `present(${change})`)].join(" | ");
-    const conflictedNow = yield* changeIdsAt(`conflicts() & (${rebased})`);
+    // A merged change is abandoned by the rebase, so its id may be gone. A change that wasn't
+    // combined with a push from another checkout has two commits with one id. `change_id()`
+    // selects none or both, where the bare id fails. The other commit is in another stack, so a
+    // conflict it already had isn't one this rebase caused.
+    const rebased = ["none()", ...changes.map((change) => `change_id(${change})`)].join(" | ");
+    const untouched = ["none()", ...conflictedCommits].join(" | ");
+    const conflictedNow = yield* changeIdsAt(`(conflicts() & (${rebased})) ~ (${untouched})`);
     const mayRestore = !changes.some((change) => required.includes(change));
     if (mayRestore && conflictedNow.some((change) => !conflicted.includes(change))) {
       yield* jj.run(["operation", "restore", operation]);

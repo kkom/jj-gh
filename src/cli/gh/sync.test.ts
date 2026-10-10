@@ -6,10 +6,13 @@ import {
   addCommitOnGitHub,
   moveTrunkOnGitHub,
   rebaseOnGitHub,
+  rewriteElsewhere,
+  squashMergeOnGitHub,
+} from "../../testing/branch-changes";
+import {
   pushedStack,
   removeScratchRepositories,
   type ScratchRepository,
-  squashMergeOnGitHub,
 } from "../../testing/scratch-repository";
 import { stackChanges } from "./stack/changes";
 import { sync } from "./sync";
@@ -121,6 +124,28 @@ describe("sync", () => {
       await syncIn(repository);
       expect(repository.log()).toEqual(["a [a]", "b [b]"]);
       expect(files(repository, "a")).toEqual(["a.txt", "base.txt", "local.txt", "trunk.txt"]);
+    });
+
+    // Another checkout's commits keep the ids of the local changes, so a change that isn't
+    // combined has two commits with one id while its stack is rebased. A sync rebases a stack
+    // and pushes nothing, so the local changes differ from the pushed ones without being edited.
+    it("fails after rebasing where another checkout rewrote changes a sync had rebased", async () => {
+      moveTrunkOnGitHub(repository);
+      await syncIn(repository);
+      rewriteElsewhere(repository, "a", "b");
+      moveTrunkOnGitHub(repository, "later.txt");
+      const failure = await Effect.runPromise(
+        Effect.flip(sync()).pipe(Effect.provide(repository.layer)),
+      );
+      expect(failure.message).toContain("weren't combined:\nb\na\n");
+      expect(repository.jj("log", "--no-graph", "-r", "conflicts()", "-T", "change_id")).toBe("");
+      expect(files(repository, "@")).toEqual([
+        "a.txt",
+        "b.txt",
+        "base.txt",
+        "later.txt",
+        "trunk.txt",
+      ]);
     });
 
     it("fails after rebasing where both sides changed and GitHub rewrote the branch", async () => {

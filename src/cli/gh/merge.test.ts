@@ -2,12 +2,12 @@ import { afterAll, describe, expect, it } from "bun:test";
 
 import { Effect, Layer, Option } from "effect";
 
+import { squashMergeOnGitHub } from "../../testing/branch-changes";
 import { fakeGitHub, openPullRequest, stackOf } from "../../testing/fake-github";
 import {
   pushedStack,
   removeScratchRepositories,
   type ScratchRepository,
-  squashMergeOnGitHub,
 } from "../../testing/scratch-repository";
 import { merge } from "./merge";
 
